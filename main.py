@@ -1,8 +1,6 @@
 import os
 
-from pipelines.answering_pipeline import AnsweringPipeline
-from pipelines.rag_pipeline import RagPipeline
-from utils.chromadb_client import chromadb_client
+from cli.main_cli import app
 
 
 def init():
@@ -16,13 +14,7 @@ def init():
 
 def main():
     init()
-    # rag_pipeline = RagPipeline()
-    # collection = chromadb_client.chroma_client.get_or_create_collection(name="identity")
-    # rag_pipeline.update_db_collection_content(collection, chromadb_client)
-    user_input = "Quelles librairies python a utilisé Mr Desvignes lors de son emploi à la MAIF ?"
-    answering_pipeline = AnsweringPipeline()
-    response = answering_pipeline.answer(user_input)
-    print(response)
+    app()
 
 
 
