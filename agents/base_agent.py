@@ -31,12 +31,11 @@ class BaseAgent:
         )
         self.response_history = []
 
-    def execute(self, request: str, data: str = ""):
+    def execute(self, request: str):
         print(f"Lancement de l'agent {self.name}")
         agent_input = AgentInput(
             messages = [
                 {"role":"system", "content":self.system_prompt},
-                {"role":"system", "content":f"There is the provided reference data: {data}"},
                 {"role":"user","content":request}
             ]
         )

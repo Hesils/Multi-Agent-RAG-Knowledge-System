@@ -5,13 +5,14 @@ import chromadb
 from langchain_community.document_loaders import PyPDFDirectoryLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
+from utils.chromadb_client import ChromadbClient
+
 
 class RagPipeline:
     def __init__(self):
-        self.chroma_client = chromadb.PersistentClient(os.environ["CHROMADB_PATH"])
         self.pdf_loader = PyPDFDirectoryLoader(os.environ["DATA_PATH"])
 
-    def update_db_collection_content(self, collection: chromadb.Collection):
+    def update_db_collection_content(self, collection: chromadb.Collection, chroma_client: ChromadbClient):
         raw_documents = self.pdf_loader.load()
         text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=300,
@@ -33,19 +34,14 @@ class RagPipeline:
             i += 1
 
         # adding/update to chromadb
-        collection.upsert(
+        chroma_client.db_upsert(
+            collection=collection,
             documents=documents,
             metadatas=metadata,
             ids=ids
         )
 
-    @staticmethod
-    def get_chunks_for_collection(collection: chromadb.Collection, requests: list[str]) -> chromadb.QueryResult:
-        results = collection.query(
-            query_texts=requests,
-            n_results=10
-        )
-        return results
+
 
     @staticmethod
     def build_data(query_results: chromadb.QueryResult) -> str:
@@ -53,6 +49,6 @@ class RagPipeline:
         batches = zip(query_results["ids"], query_results["documents"], query_results["metadatas"])
         for batch in batches:
             records = zip(batch[0], batch[1], batch[2])
-            for id, document, metadata in records:
-                data_dict[id] = {"content": document, "metadata": metadata}
+            for chunk_id, document, metadata in records:
+                data_dict[chunk_id] = {"content": document, "metadata": metadata}
         return json.dumps(data_dict)
