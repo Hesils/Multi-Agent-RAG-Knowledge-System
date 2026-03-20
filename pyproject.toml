@@ -3,4 +3,14 @@ name = "multi-agent-rag-knowledge-system"
 version = "0.1.0"
 description = "Add your description here"
 requires-python = ">=3.14"
-dependencies = []
+dependencies = [
+    "chromadb==1.5.5",
+    "langchain==1.2.13",
+    "langchain-community==0.4.1",
+    "langchain-openai==1.1.11",
+    "langchain-text-splitters==1.1.1",
+    "llama-index==0.14.18",
+    "pypdf==6.9.1",
+    "pytest==9.0.2",
+    "semver==3.0.4",
+]
