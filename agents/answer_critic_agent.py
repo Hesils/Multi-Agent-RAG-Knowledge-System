@@ -3,10 +3,10 @@ from typing import Union, Optional
 from langchain_openai import ChatOpenAI
 
 from agents.base_agent import BaseAgent
-from utils.types.agent_types import AnswerOutput
+from utils.types.agent_types import AnswerCriticAgentOutput
 
 
-class AnswerAgent(BaseAgent):
+class AnswerCriticAgent(BaseAgent):
     def __init__(self,
                  name: str,
                  description: str,
@@ -21,13 +21,5 @@ class AnswerAgent(BaseAgent):
                 temperature=0,
             ),
             system_prompt_version=system_prompt_version,
-            output_type=AnswerOutput
+            output_type=AnswerCriticAgentOutput
         )
-
-    def execute(self, request: str, role: str, data: str = ""):
-        if data:
-            self.agent_input.messages.append({
-                "role": "system",
-                "content": f"There is the provided reference data: {data}"
-            })
-        return super().execute(request, role)

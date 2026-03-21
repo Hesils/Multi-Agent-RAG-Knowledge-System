@@ -10,6 +10,8 @@ class ChromadbClient:
     def __init__(self):
         self.chroma_client = chromadb.PersistentClient(os.environ["CHROMADB_PATH"])
 
+    def list_collections(self) -> list[str]:
+        return [collection.name for collection in self.chroma_client.list_collections()]
 
     @staticmethod
     def db_upsert(

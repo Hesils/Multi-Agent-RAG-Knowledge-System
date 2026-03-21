@@ -11,6 +11,10 @@ from utils.chromadb_client import ChromadbClient
 
 
 class RagPipeline:
+    # TODO Adding a "Document" folder recursive RAG loader and adding a new collection by subdirectory
+    # TODO Implementing list_collection and smarter id generation
+    # TODO Do AnswerPipeline make the collection choice
+
     def __init__(self):
         self.pdf_loader = PyPDFDirectoryLoader(os.environ["DATA_PATH"])
         self.chunk_contextualizer_agent = self.init_contextualizer_agent()
@@ -38,7 +42,7 @@ class RagPipeline:
                     contextualized_content = self.chunk_contextualizer_agent.execute(json.dumps({
                         "chunk": chunk.page_content,
                         "around_pages_content": "\n".join([page.page_content for page in context_pages_content])
-                    }))
+                    }), role="user")
                     documents.append(contextualized_content.content)
                     break
                 except StructuredOutputValidationError as e:

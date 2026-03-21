@@ -1,20 +1,24 @@
 import json
+import os
 
 from agents.ChunkRankerAgent import ChunkRankerAgent
 from agents.query_agent import QueryAgent
 from agents.answer_agent import AnswerAgent
+from agents.answer_critic_agent import AnswerCriticAgent
 from utils.chromadb_client import chromadb_client
+from utils.types.agent_types import AnswerSource
 
 class AnsweringPipeline:
     def __init__(self):
         self.query_agent = self.init_query_agent()
-        self.answer_agent = self.init_answer_agent()
         self.chunk_ranker_agent = self.init_chunk_ranker_agent()
+        self.answer_agent = self.init_answer_agent()
+        self.answer_critic_agent = self.init_answer_critic_agent()
         self.collection = chromadb_client.chroma_client.get_or_create_collection(name="identity")
 
 
     def answer(self, user_input: str) -> str:
-        reworked_query = self.query_agent.execute(user_input)
+        reworked_query = self.query_agent.execute(user_input, role="user")
         sub_queries_chunks = chromadb_client.get_chunks_for_collection(self.collection, reworked_query.sub_queries)
         query_chunks = chromadb_client.get_chunks_for_collection(self.collection, reworked_query.optimized_query)
         ids_list, content_list, metadata_list = self.make_chunks_unique(
@@ -26,15 +30,30 @@ class AnsweringPipeline:
         ranker_output = self.chunk_ranker_agent.execute(json.dumps({
             "user_query": user_input,
             "chunks": formated_data
-        }))
+        }), role="user")
         ids_list, content_list, metadata_list = self.make_chunks_unique(
             query_chunks["ids"] + sub_queries_chunks["ids"],
             query_chunks["documents"] + sub_queries_chunks["documents"],
             query_chunks["metadatas"] + sub_queries_chunks["metadatas"],
             ids_to_exclude=[chunk.chunk_id for chunk in ranker_output.chunks_rank if not chunk.relevance > 0.7]
         )
-        answer = self.answer_agent.execute(user_input, self.format_data(ids_list, content_list, metadata_list))
-        return answer
+        formated_data = self.format_data(ids_list, content_list, metadata_list)
+        answer_try = 0
+        answer_agent_output = self.answer_agent.execute(user_input, "user", formated_data)
+        while answer_try < 5:
+            answer_critic = self.answer_critic_agent.execute(json.dumps({
+                "user_query": user_input,
+                "answer": answer_agent_output.answer,
+                "chunks": formated_data,
+                "answer_sources": [source.model_dump_json() for source in answer_agent_output.sources]
+            }), role="user")
+            if answer_critic.is_valid:
+                break
+            else:
+                answer_try += 1
+                answer_agent_output = self.answer_agent.execute(answer_critic.model_dump_json(), "system")
+
+        return "\n".join([answer_agent_output.answer, self.format_sources(answer_agent_output.sources)])
 
     @staticmethod
     def make_chunks_unique(
@@ -58,12 +77,20 @@ class AnsweringPipeline:
         return ids_list, content_list, metadata_list
 
     @staticmethod
+    def format_sources(sources: list[AnswerSource]):
+        if not sources:
+            return ""
+        formated_sources =set(f"{source.source.replace(os.environ['DATA_PATH'], '')[1:]} page {source.page}" for source in sources)
+        return "\n".join(["Sources:", "\n".join(formated_sources)])
+
+    @staticmethod
     def format_data(ids: list[str], contents: list[str], metadatas: list[dict]) -> str:
         formated_data = {}
         if len(ids) != len(contents) or len(ids) != len(metadatas):
             raise ValueError(f"ids({len(ids)}), contents({len(contents)}) and metadatas({len(metadatas)}) must contain same number of elements.")
         for rec_id, content, metadata in zip(ids, contents, metadatas):
-            formated_data[rec_id] = {"content": content, "metadata": metadata}
+            clear_metadata = {"source": metadata["source"], "page": metadata["page"], "total_pages": metadata["total_pages"]}
+            formated_data[rec_id] = {"content": content, "metadata": clear_metadata}
         return json.dumps(formated_data)
 
     @staticmethod
@@ -75,7 +102,7 @@ class AnsweringPipeline:
         return AnswerAgent(
             name="AnswerAgent",
             description="AI assistant",
-            system_prompt_version="0.1.1"
+            system_prompt_version="0.1.2"
         )
 
     @staticmethod
@@ -86,3 +113,9 @@ class AnsweringPipeline:
             system_prompt_version="0.1.2"
         )
 
+    @staticmethod
+    def init_answer_critic_agent():
+        return AnswerCriticAgent(
+            name="AnswerCriticAgent",
+            description="Answer ranker"
+        )
