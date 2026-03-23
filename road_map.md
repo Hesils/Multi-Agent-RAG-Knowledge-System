@@ -8,14 +8,7 @@ Answer pipeline
 Rag Pipeline
 - Détection des changements (watcher)
   - Ajout du bind event -> action
-- Gestion intelligente des updates
-  - Détection du file modified
-  - Chunking du file
-  - recuperation des chunks en VDB de ce fichier
-  - comparaison de chunck généré et des chunks en VDB (chunk hash) pour savoir lequels delet
-  - stocké tous ceux qui n'ont pas trouvé leur équivalent en VDB
 - Ingestion propre multi type
-  - Faire une fonction get_loader en fonction de l'extension du fichier
   - Implementer un TextLoader (.txt, .md)
   - Implementer un CodeLoader
   - Implement un OpenDocLoader (.odt)

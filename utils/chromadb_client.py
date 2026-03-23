@@ -14,6 +14,10 @@ class ChromadbClient:
         return [collection.name for collection in self.chroma_client.list_collections()]
 
     @staticmethod
+    def db_delete_with_id(chunks_id: list[str], collection: chromadb.Collection):
+        collection.delete(chunks_id)
+
+    @staticmethod
     def db_upsert(
             collection: chromadb.Collection,
             documents: OneOrMany[Document],
@@ -40,6 +44,19 @@ class ChromadbClient:
         results = collection.query(
             query_texts=requests,
             n_results=n_results
+        )
+        return results
+
+    @staticmethod
+    def get_chunks_where(
+            metadata_keys: list[str],
+            metadata_values: list[str],
+            collection: chromadb.Collection,
+    ) -> chromadb.GetResult:
+        if len(metadata_keys) != len(metadata_values):
+            raise ValueError(f"metadata_keys({len(metadata_keys)}) must have same number of element than metadata_values({len(metadata_values)})")
+        results = collection.get(
+            where={key: value for key, value in zip(metadata_keys, metadata_values)},
         )
         return results
 

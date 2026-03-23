@@ -16,6 +16,31 @@ class RagPipeline:
         self.chunk_contextualizer_agent = self.init_contextualizer_agent()
 
     def update_doc(self, doc_path: str, collection: chromadb.Collection, chroma_client: ChromadbClient):
+        self.delete_doc(doc_path, collection, chroma_client)
+        self.insert_doc(doc_path, collection, chroma_client)
+
+    def update_docs(self, docs_path: list[str], collection: chromadb.Collection, chroma_client: ChromadbClient):
+        for doc in docs_path:
+            self.update_doc(doc, collection, chroma_client)
+
+    def update_directory(self, dir_path: str, collection: chromadb.Collection, chroma_client: ChromadbClient):
+        dir_path = Path(dir_path)
+        for file in dir_path.glob("*"):
+            if file.is_dir():
+                self.update_directory(str(dir_path), collection, chroma_client)
+            elif file.is_file():
+                self.update_doc(str(file), collection, chroma_client)
+
+    @staticmethod
+    def delete_doc(doc_path: str, collection: chromadb.Collection, chroma_client: ChromadbClient):
+        get_result = chroma_client.get_chunks_where(
+            ["source"],
+            [doc_path],
+            collection,
+        )
+        chroma_client.db_delete_with_id(get_result["ids"], collection)
+
+    def insert_doc(self, doc_path: str, collection: chromadb.Collection, chroma_client: ChromadbClient):
         loader = self.chose_loader(doc_path)
         chunk_manager = self.chose_chunker(doc_path)
         if not loader or not chunk_manager:
@@ -39,18 +64,6 @@ class RagPipeline:
             metadatas=metadata,
             ids=ids
         )
-
-    def update_docs(self, docs_path: list[str], collection: chromadb.Collection, chroma_client: ChromadbClient):
-        for doc in docs_path:
-            self.update_doc(doc, collection, chroma_client)
-
-    def update_directory(self, dir_path: str, collection: chromadb.Collection, chroma_client: ChromadbClient):
-        dir_path = Path(dir_path)
-        for file in dir_path.glob("*"):
-            if file.is_dir():
-                self.update_directory(str(dir_path), collection, chroma_client)
-            elif file.is_file():
-                self.update_doc(str(file), collection, chroma_client)
 
     @staticmethod
     def chose_loader(file_path: str) -> Union[BaseLoader,None]:

@@ -19,3 +19,8 @@ def rag_update():
     rag_pipeline = RagPipeline()
     collection = chromadb_client.chroma_client.get_or_create_collection(name="identity")
     rag_pipeline.update_directory(os.environ["DATA_PATH"], collection, chromadb_client)
+
+@app.command()
+def rag_get():
+    collection = chromadb_client.chroma_client.get_or_create_collection(name="identity")
+    chromadb_client.get_chunks_where(["source"], [""], collection)
