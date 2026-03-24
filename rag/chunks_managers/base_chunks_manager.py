@@ -41,7 +41,7 @@ class BaseChunksManager(ABC):
                 docs_full_content[doc_path] = document.page_content
             chunks += self.text_splitter.create_documents([document.page_content], [new_metadata])
         for i, chunk in enumerate(chunks):
-            chunk.metadata["file_hash"] = hashlib.md5(docs_full_content[Path(chunk.metadata["source"])]).hexdigest()
+            chunk.metadata["file_hash"] = hashlib.md5(docs_full_content[Path(chunk.metadata["source"])].encode()).hexdigest()
             chunk.metadata["chunk_hash"] = hashlib.md5(chunk.page_content.encode()).hexdigest()
             chunk.metadata["uuid"] = hashlib.md5(f"{chunk.metadata['source']}_{i}_{chunk.metadata['file_hash']}".encode()).hexdigest()
         return chunks

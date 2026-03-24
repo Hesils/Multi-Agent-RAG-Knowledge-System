@@ -46,7 +46,7 @@ class BaseAgent:
         agent_response = self.agent.invoke(self.agent_input)
         response_content = agent_response["messages"][-1].content if not self.structured_output else agent_response["structured_response"].model_dump_json()
         self.agent_input.messages.append({
-            "role": "agent",
+            "role": "ai",
             "content": response_content
         })
         return agent_response["messages"][-1].content if not self.structured_output else agent_response["structured_response"]
