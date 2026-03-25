@@ -1,3 +1,4 @@
+import os
 import time
 from pathlib import Path
 from typing import Union
@@ -7,10 +8,22 @@ import chromadb
 from langchain_core.documents import Document
 
 from agents.ChunkContextualizerAgent import ChunkContextualizerAgent
-from rag.loaders.base_loader import BaseLoader
-from rag.loaders.pdf_loader import PdfLoader
-from rag.chunks_managers.base_chunks_manager import BaseChunksManager
-from rag.chunks_managers.pdf_chunks_manager import PdfChunksManager
+from rag.loaders import (
+    PdfLoader,
+    OpenDocLoader,
+    TextFileLoader,
+    MarkdownLoader,
+    BaseLoader,
+    GDocsLoader
+)
+from rag.chunks_managers import (
+    PdfChunksManager,
+    OpenDocsChunksManager,
+    TextChunksManager,
+    MarkdownChunksManager,
+    BaseChunksManager,
+    GDocsChunksManager
+)
 from utils.chromadb_client import ChromadbClient
 
 
@@ -108,6 +121,14 @@ class RagPipeline:
         ext = Path(file_path).suffix
         if ext == ".pdf":
             return PdfLoader()
+        elif ext == ".md":
+            return MarkdownLoader()
+        elif ext == ".txt":
+            return TextFileLoader()
+        elif ext == ".odt":
+            return OpenDocLoader()
+        # elif ext == ".gdoc" and "GDRIVE_CRED_PATH" in os.environ:
+        #     return GDocsLoader(os.environ["GDRIVE_CRED_PATH"])
         return None
 
     @staticmethod
@@ -115,6 +136,14 @@ class RagPipeline:
         ext = Path(file_path).suffix
         if ext == ".pdf":
             return PdfChunksManager()
+        elif ext == ".md":
+            return MarkdownChunksManager()
+        elif ext == ".txt":
+            return TextChunksManager()
+        elif ext == ".odt":
+            return OpenDocsChunksManager()
+        # elif ext == ".gdoc" and "GDRIVE_CRED_PATH" in os.environ:
+        #     return GDocsChunksManager()
         return None
 
     @staticmethod

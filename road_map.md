@@ -6,12 +6,8 @@ Answer pipeline
 
 
 Rag Pipeline
-- Détection des changements (watcher)
-  - Ajout du bind event -> action
 - Ingestion propre multi type
-  - Implementer un TextLoader (.txt, .md)
   - Implementer un CodeLoader
-  - Implement un OpenDocLoader (.odt)
   - Implementer un GDocLoader
 - Une collection mais metadata enrichies
   - metadata = {
