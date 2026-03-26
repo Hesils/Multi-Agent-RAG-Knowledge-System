@@ -5,6 +5,8 @@ import chromadb
 from chromadb import Metadata
 from chromadb.api.types import OneOrMany, Document, ID
 
+from utils.metrics import metrics
+
 
 class ChromadbClient:
     def __init__(self):
@@ -31,6 +33,7 @@ class ChromadbClient:
                 ids=ids
             )
         except Exception as e:
+            metrics.add("error", {"type": "DB Upsert Error"})
             print(f"Error while upserting in db: {e}")
             return False
         return True
@@ -54,6 +57,7 @@ class ChromadbClient:
             collection: chromadb.Collection,
     ) -> chromadb.GetResult:
         if len(metadata_keys) != len(metadata_values):
+            metrics.add("error", {"type": "DB Get Error"})
             raise ValueError(f"metadata_keys({len(metadata_keys)}) must have same number of element than metadata_values({len(metadata_values)})")
         results = collection.get(
             where={key: value for key, value in zip(metadata_keys, metadata_values)},

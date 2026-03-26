@@ -9,6 +9,8 @@ from watchdog.observers import Observer
 from pipelines.rag_pipeline import RagPipeline
 from utils.chromadb_client import chromadb_client
 
+from utils.metrics import metrics
+
 DELETE_TIMEOUT = 2.0  # temps avant considérer un delete comme réel
 DEBOUNCE_SECONDS = 0.5  # debounce pour les bursts
 
@@ -27,10 +29,12 @@ class DataFilesEventHandler(FileSystemEventHandler):
         # Thread pour traiter les events
         self.worker = threading.Thread(target=self._process_events_loop, daemon=True)
         self.worker.start()
+        metrics.add("queue", {"action": "set","size": 0})
 
     # -------------------- FS EVENT --------------------
     def on_any_event(self, event: FileSystemEvent):
         with self.lock:
+            metrics.add("queue", {"action": "inc","size": 1})
             self.event_buffer.append({"event": event, "time": time.time()})
 
     # -------------------- MAIN LOOP --------------------
@@ -56,6 +60,7 @@ class DataFilesEventHandler(FileSystemEventHandler):
         for path, _, _ in to_delete:
             self.rag_pipeline.delete_doc(path, self.collection, chromadb_client)
             self.hash_cache.pop(path, None)
+            metrics.add("queue", {"action": "set","size": 0})
         self.deleted_events_buffer = [e for e in self.deleted_events_buffer if now - e[2] < DELETE_TIMEOUT]
 
     # -------------------- HANDLE SINGLE EVENT --------------------
@@ -77,18 +82,21 @@ class DataFilesEventHandler(FileSystemEventHandler):
                 self.deleted_events_buffer.remove(match)
                 self.hash_cache[path] = self.hash_cache.get(del_path)  # move hash to new path
                 self.hash_cache.pop(del_path, None)
+                metrics.add("queue", {"action": "dec","size": 2})
             else:
                 self.rag_pipeline.insert_doc(path, self.collection, chromadb_client)
                 self.hash_cache[path] = self._compute_file_hash(path)
+                metrics.add("queue", {"action": "dec","size": 1})
 
         elif event.event_type == "modified":
             self.rag_pipeline.update_doc(path, self.collection, chromadb_client)
             self.hash_cache[path] = self._compute_file_hash(path)
+            metrics.add("queue", {"action": "dec","size": 1})
         elif event.event_type == "moved":
             self.rag_pipeline.update_doc_path(path, event.dest_path, self.collection, chromadb_client)
             self.hash_cache[event.dest_path] = self.hash_cache[path]
             self.hash_cache.pop(path, None)
-
+            metrics.add("queue", {"action": "dec","size": 1})
 
     # -------------------- MATCH DELETE --------------------
     def _find_delete_match(self, create_path: str):

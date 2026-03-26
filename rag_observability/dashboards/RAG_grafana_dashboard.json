@@ -1,0 +1,124 @@
+{
+  "title": "RAG Pipeline Observability",
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Files Processed",
+      "targets": [
+        { "expr": "sum(files_processed_total)" }
+      ],
+      "gridPos": { "x": 0, "y": 0, "w": 4, "h": 4 }
+    },
+    {
+      "type": "stat",
+      "title": "Ignored Files",
+      "targets": [
+        { "expr": "sum(ignored_files_total)" }
+      ],
+      "gridPos": { "x": 4, "y": 0, "w": 4, "h": 4 }
+    },
+    {
+      "type": "stat",
+      "title": "Chunks Created",
+      "targets": [
+        { "expr": "sum(chunks_created_total)" }
+      ],
+      "gridPos": { "x": 8, "y": 0, "w": 4, "h": 4 }
+    },
+    {
+      "type": "stat",
+      "title": "Files in Queue",
+      "targets": [
+        { "expr": "files_in_queue" }
+      ],
+      "gridPos": { "x": 12, "y": 0, "w": 4, "h": 4 }
+    },
+    {
+      "type": "stat",
+      "title": "Errors",
+      "targets": [
+        { "expr": "sum(pipeline_errors_total)" }
+      ],
+      "gridPos": { "x": 16, "y": 0, "w": 4, "h": 4 }
+    },
+
+    {
+      "type": "timeseries",
+      "title": "Processing Rate",
+      "targets": [
+        { "expr": "rate(files_processed_total[1m])", "legendFormat": "{{status}}" }
+      ],
+      "gridPos": { "x": 0, "y": 4, "w": 12, "h": 6 }
+    },
+    {
+      "type": "timeseries",
+      "title": "Ignored Files by Type",
+      "targets": [
+        { "expr": "rate(ignored_files_total[1m])", "legendFormat": "{{file_type}}" }
+      ],
+      "gridPos": { "x": 12, "y": 4, "w": 12, "h": 6 }
+    },
+
+    {
+      "type": "timeseries",
+      "title": "DB Upsert Time",
+      "targets": [
+        {
+          "expr": "rate(db_upsert_time_sum[1m]) / rate(db_upsert_time_count[1m])",
+          "legendFormat": "avg sec"
+        }
+      ],
+      "gridPos": { "x": 0, "y": 10, "w": 12, "h": 6 }
+    },
+    {
+      "type": "timeseries",
+      "title": "Processing Time",
+      "targets": [
+        {
+          "expr": "rate(file_processing_seconds_sum[1m]) / rate(file_processing_seconds_count[1m])",
+          "legendFormat": "avg sec"
+        }
+      ],
+      "gridPos": { "x": 12, "y": 10, "w": 12, "h": 6 }
+    },
+
+    {
+      "type": "timeseries",
+      "title": "File Size Distribution",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.5, rate(file_size_bytes_bucket[5m]))",
+          "legendFormat": "p50"
+        },
+        {
+          "expr": "histogram_quantile(0.9, rate(file_size_bytes_bucket[5m]))",
+          "legendFormat": "p90"
+        }
+      ],
+      "gridPos": { "x": 0, "y": 16, "w": 12, "h": 6 }
+    },
+
+    {
+      "type": "timeseries",
+      "title": "Chunks Creation Rate",
+      "targets": [
+        { "expr": "rate(chunks_created_total[1m])", "legendFormat": "chunks/sec" }
+      ],
+      "gridPos": { "x": 12, "y": 16, "w": 12, "h": 6 }
+    },
+
+    {
+      "type": "table",
+      "title": "Errors by Type",
+      "targets": [
+        {
+          "expr": "pipeline_errors_total",
+          "format": "table"
+        }
+      ],
+      "gridPos": { "x": 0, "y": 22, "w": 24, "h": 6 }
+    }
+  ],
+  "schemaVersion": 38,
+  "version": 2
+}

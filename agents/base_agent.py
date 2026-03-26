@@ -1,3 +1,4 @@
+import time
 from typing import Union, Optional
 from langchain.agents import create_agent
 from langchain_openai import ChatOpenAI
@@ -5,7 +6,7 @@ from pydantic import BaseModel
 
 from utils.prompt_utils import get_prompt
 from utils.types.agent_types import AgentInput
-
+from utils.metrics import metrics
 
 class BaseAgent:
     def __init__(
@@ -29,7 +30,7 @@ class BaseAgent:
             model=model,
             system_prompt=self.system_prompt,
             tools=tools,
-            response_format=output_type
+            response_format=output_type,
         )
         self.agent_input = AgentInput(
             messages = [
@@ -43,8 +44,13 @@ class BaseAgent:
             "role": role,
             "content": request
         })
+        metrics.add("agent_call", {"agent_name": self.name})
+        agent_call_start_time = time.time()
         agent_response = self.agent.invoke(self.agent_input)
+        metrics.add("llm_time", {"duration": agent_call_start_time - time.time()})
         response_content = agent_response["messages"][-1].content if not self.structured_output else agent_response["structured_response"].model_dump_json()
+        metrics.add("tokens", {"type": "input", "count": agent_response["messages"][-1].usage_metadata["input_tokens"]})
+        metrics.add("tokens", {"type": "output", "count": agent_response["messages"][-1].usage_metadata["output_tokens"]})
         self.agent_input.messages.append({
             "role": "ai",
             "content": response_content

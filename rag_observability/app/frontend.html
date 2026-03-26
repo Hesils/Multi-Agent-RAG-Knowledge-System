@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>RAG Trace Viewer</title>
+    <style>
+        body { font-family: Arial; margin: 20px; }
+        table { border-collapse: collapse; width: 100%; }
+        td, th { border: 1px solid #ccc; padding: 8px; }
+        th { background: #eee; }
+    </style>
+</head>
+<body>
+
+<h1>RAG Trace Viewer</h1>
+<select id="traceSelect" onchange="loadTrace()"></select>
+
+<div id="traceDetail"></div>
+
+<script>
+    async function loadTraces() {
+        const res = await fetch('/traces');
+        const traces = await res.json();
+        const select = document.getElementById('traceSelect');
+        traces.forEach(t => {
+            const option = document.createElement('option');
+            option.value = t.trace_id;
+            option.text = `${t.trace_id} - ${t.query}`;
+            select.add(option);
+        });
+    }
+
+    async function loadTrace() {
+        const trace_id = document.getElementById('traceSelect').value;
+        const res = await fetch(`/trace/${trace_id}`);
+        const trace = await res.json();
+
+        let html = `<h2>Query: ${trace.query}</h2>`;
+        html += `<p>Agents used: ${trace.agents_used.join(", ")}</p>`;
+        html += `<p>Retrieval time: ${trace.retrieval_time}s | LLM time: ${trace.llm_time}s</p>`;
+        html += `<h3>Chunks:</h3><ul>`;
+        trace.chunks.forEach(c => {
+            html += `<li>[${c.source_file}] score: ${c.score} | ${c.content}</li>`;
+        });
+        html += `</ul><h3>Response:</h3><p>${trace.response}</p>`;
+
+        document.getElementById('traceDetail').innerHTML = html;
+    }
+
+    loadTraces();
+</script>
+
+</body>
+</html>

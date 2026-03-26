@@ -1,0 +1,133 @@
+{
+  "title": "RAG Answer Pipeline - Agents Observability",
+  "panels": [
+
+    {
+      "type": "stat",
+      "title": "Requests (Total)",
+      "targets": [
+        { "expr": "sum(rag_requests_total)" }
+      ],
+      "gridPos": { "x": 0, "y": 0, "w": 6, "h": 4 }
+    },
+    {
+      "type": "stat",
+      "title": "Requests / sec",
+      "targets": [
+        { "expr": "rate(rag_requests_total[1m])" }
+      ],
+      "gridPos": { "x": 6, "y": 0, "w": 6, "h": 4 }
+    },
+    {
+      "type": "stat",
+      "title": "Empty Responses",
+      "targets": [
+        { "expr": "sum(empty_responses_total)" }
+      ],
+      "gridPos": { "x": 12, "y": 0, "w": 6, "h": 4 }
+    },
+    {
+      "type": "stat",
+      "title": "Error Rate",
+      "targets": [
+        { "expr": "rate(empty_responses_total[5m])" }
+      ],
+      "gridPos": { "x": 18, "y": 0, "w": 6, "h": 4 }
+    },
+
+    {
+      "type": "timeseries",
+      "title": "Request Rate",
+      "targets": [
+        {
+          "expr": "rate(rag_requests_total[1m])",
+          "legendFormat": "requests/sec"
+        }
+      ],
+      "gridPos": { "x": 0, "y": 4, "w": 12, "h": 6 }
+    },
+
+    {
+      "type": "timeseries",
+      "title": "Global Latency",
+      "targets": [
+        {
+          "expr": "rate(rag_request_duration_seconds_sum[1m]) / rate(rag_request_duration_seconds_count[1m])",
+          "legendFormat": "avg sec"
+        }
+      ],
+      "gridPos": { "x": 12, "y": 4, "w": 12, "h": 6 }
+    },
+
+    {
+      "type": "timeseries",
+      "title": "Retrieval vs LLM Latency",
+      "targets": [
+        {
+          "expr": "rate(retrieval_time_seconds_sum[1m]) / rate(retrieval_time_seconds_count[1m])",
+          "legendFormat": "retrieval"
+        },
+        {
+          "expr": "rate(llm_time_seconds_sum[1m]) / rate(llm_time_seconds_count[1m])",
+          "legendFormat": "llm"
+        }
+      ],
+      "gridPos": { "x": 0, "y": 10, "w": 24, "h": 6 }
+    },
+
+    {
+      "type": "timeseries",
+      "title": "Documents Retrieved",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.5, rate(documents_retrieved_bucket[5m]))",
+          "legendFormat": "p50"
+        },
+        {
+          "expr": "histogram_quantile(0.9, rate(documents_retrieved_bucket[5m]))",
+          "legendFormat": "p90"
+        }
+      ],
+      "gridPos": { "x": 0, "y": 16, "w": 12, "h": 6 }
+    },
+
+    {
+      "type": "timeseries",
+      "title": "Tokens Usage",
+      "targets": [
+        {
+          "expr": "rate(tokens_used_total[1m])",
+          "legendFormat": "{{type}}"
+        }
+      ],
+      "gridPos": { "x": 12, "y": 16, "w": 12, "h": 6 }
+    },
+
+    {
+      "type": "timeseries",
+      "title": "Agent Calls",
+      "targets": [
+        {
+          "expr": "sum by (agent_name)(rate(agent_calls_total[1m]))",
+          "legendFormat": "{{agent_name}}"
+        }
+      ],
+      "gridPos": { "x": 0, "y": 22, "w": 24, "h": 6 }
+    },
+
+    {
+      "type": "table",
+      "title": "Agent Calls (Total)",
+      "targets": [
+        {
+          "expr": "agent_calls_total",
+          "format": "table"
+        }
+      ],
+      "gridPos": { "x": 0, "y": 28, "w": 24, "h": 6 }
+    }
+
+  ],
+  "schemaVersion": 38,
+  "version": 1
+}

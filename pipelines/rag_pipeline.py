@@ -25,6 +25,7 @@ from rag.chunks_managers import (
     GDocsChunksManager
 )
 from utils.chromadb_client import ChromadbClient
+from utils.metrics import metrics
 
 
 class RagPipeline:
@@ -32,11 +33,14 @@ class RagPipeline:
         self.chunk_contextualizer_agent = self.init_contextualizer_agent()
 
     def update_doc(self, doc_path: str, collection: chromadb.Collection, chroma_client: ChromadbClient):
+        process_start_time = time.time()
         loader = self.chose_loader(doc_path)
         chunk_manager = self.chose_chunker(doc_path)
 
         if not loader or not chunk_manager:
+            metrics.add("ignored_file", {"file_type" : doc_path.split(".")[-1]})
             return
+
         existing_hash_map, existing_hashes = self._get_existing_chunks(
             doc_path, collection, chroma_client
         )
@@ -45,6 +49,10 @@ class RagPipeline:
             raw_doc, chunk_manager, existing_hashes
         )
         documents, metadata, ids = self._execute_parallel(tasks, chunk_manager)
+        if documents:
+            metrics.add("file_size", {"size" : sum([len(doc.page_content.encode("utf-8")) for doc in raw_doc ])})
+            metrics.add("chunks_created", {"count" : len(documents)})
+            metrics.add("file_processed", {"status" : "success", "file_type": chunk_manager.file_type})
         ids_to_delete = self._compute_deletions(
             existing_hash_map, existing_hashes, new_hashes
         )
@@ -56,6 +64,7 @@ class RagPipeline:
             ids,
             ids_to_delete
         )
+        metrics.add("processing_time", {"duration" : time.time() - process_start_time})
 
     def update_docs(self, docs_path: list[str], collection: chromadb.Collection, chroma_client: ChromadbClient):
         for doc in docs_path:
@@ -70,10 +79,13 @@ class RagPipeline:
                 self.update_doc(str(file), collection, chroma_client)
 
     def insert_doc(self, doc_path: str, collection: chromadb.Collection, chroma_client: ChromadbClient):
+        process_start_time = time.time()
+
         loader = self.chose_loader(doc_path)
         chunk_manager = self.chose_chunker(doc_path)
 
         if not loader or not chunk_manager:
+            metrics.add("ignored_file", {"file_type" : doc_path.split(".")[-1]})
             return
 
         raw_doc = loader.load(doc_path)
@@ -82,6 +94,11 @@ class RagPipeline:
 
         documents, metadata, ids = self._execute_parallel(tasks, chunk_manager)
 
+        if documents:
+            metrics.add("file_size", {"size" : sum([len(doc.page_content.encode("utf-8")) for doc in raw_doc ])})
+            metrics.add("chunks_created", {"count" : len(documents)})
+            metrics.add("file_processed", {"status" : "success", "file_type": chunk_manager.file_type})
+
         self._apply_insert(
             collection,
             chroma_client,
@@ -89,6 +106,8 @@ class RagPipeline:
             metadata,
             ids
         )
+        metrics.add("processing_time", {"duration" : time.time() - process_start_time})
+
 
     @staticmethod
     def update_doc_path(src_path: str, new_path: str, collection: chromadb.Collection, chroma_client: ChromadbClient):
@@ -251,12 +270,14 @@ class RagPipeline:
             )
 
         if documents:
+            upsert_start_time = time.time()
             chroma_client.db_upsert(
                 collection=collection,
                 documents=documents,
                 metadatas=metadata,
                 ids=ids
             )
+            metrics.add("db_upsert", {"collection": "default","duration" : time.time() - upsert_start_time})
 
     @staticmethod
     def delete_doc(doc_path: str, collection: chromadb.Collection, chroma_client: ChromadbClient):
