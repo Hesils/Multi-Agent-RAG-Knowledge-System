@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from utils.prompt_utils import get_prompt
 from utils.types.agent_types import AgentInput
 from utils.metrics import metrics
+from utils.trace_client import TraceClient
 
 class BaseAgent:
     def __init__(
@@ -38,7 +39,7 @@ class BaseAgent:
             ]
         )
 
-    def execute(self, request: str, role: str):
+    def execute(self, request: str, role: str, trace_client: Optional[TraceClient] = None):
         print(f"Lancement de l'agent {self.name}")
         self.agent_input.messages.append({
             "role": role,
@@ -47,7 +48,8 @@ class BaseAgent:
         metrics.add("agent_call", {"agent_name": self.name})
         agent_call_start_time = time.time()
         agent_response = self.agent.invoke(self.agent_input)
-        metrics.add("llm_time", {"duration": agent_call_start_time - time.time()})
+        llm_time = agent_call_start_time - time.time()
+        metrics.add("llm_time", {"duration": llm_time})
         response_content = agent_response["messages"][-1].content if not self.structured_output else agent_response["structured_response"].model_dump_json()
         metrics.add("tokens", {"type": "input", "count": agent_response["messages"][-1].usage_metadata["input_tokens"]})
         metrics.add("tokens", {"type": "output", "count": agent_response["messages"][-1].usage_metadata["output_tokens"]})
@@ -55,4 +57,8 @@ class BaseAgent:
             "role": "ai",
             "content": response_content
         })
+        if trace_client:
+            trace_client.step(f"{self.name} call", {
+                "preview": self.agent_input.messages[-1]["content"][:200]
+            }, duration=llm_time)
         return agent_response["messages"][-1].content if not self.structured_output else agent_response["structured_response"]

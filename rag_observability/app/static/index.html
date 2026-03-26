@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>RAG Trace Viewer</title>
+
+    <style>
+        body {
+          font-family: Arial;
+          margin: 0;
+          display: flex;
+          height: 100vh;
+        }
+
+        #sidebar {
+          width: 30%;
+          border-right: 1px solid #ddd;
+          overflow-y: auto;
+          padding: 10px;
+        }
+
+        #main {
+          flex: 1;
+          padding: 20px;
+          overflow-y: auto;
+        }
+
+        .trace-item {
+          padding: 8px;
+          border-bottom: 1px solid #eee;
+          cursor: pointer;
+        }
+
+        .trace-item:hover {
+          background: #f5f5f5;
+        }
+
+        .step {
+          border-left: 4px solid #007bff;
+          padding: 10px;
+          margin-bottom: 10px;
+          background: #fafafa;
+        }
+
+        .step-title {
+          font-weight: bold;
+        }
+
+        .step-meta {
+          font-size: 12px;
+          color: #666;
+        }
+
+        .json {
+          background: #111;
+          color: #0f0;
+          padding: 10px;
+          font-family: monospace;
+          overflow-x: auto;
+          font-size: 12px;
+        }
+    </style>
+</head>
+
+<body>
+
+<div id="sidebar">
+    <h3>Traces</h3>
+    <label for="pipelineFilter"></label>
+    <select id="pipelineFilter" onchange="loadTraces()">
+        <option value="">All</option>
+        <option value="answer_pipeline">Answer</option>
+        <option value="rag_ingestion">RAG</option>
+    </select>
+    <div id="traceList"></div>
+</div>
+
+<div id="main">
+    <h2>Trace Viewer</h2>
+    <div id="traceDetail">Select a trace</div>
+</div>
+
+<script>
+    async function loadTraces() {
+      const pipeline = document.getElementById("pipelineFilter").value;
+
+      let url = "/traces";
+      if (pipeline) {
+        url += `?pipeline=${pipeline}`;
+      }
+
+      const res = await fetch(url);
+      const traces = await res.json();
+
+      const container = document.getElementById('traceList');
+      container.innerHTML = '';
+
+      traces.reverse().forEach(t => {
+        const div = document.createElement('div');
+        div.className = 'trace-item';
+        if (t.pipeline === "rag_ingestion") div.style.borderLeft = "4px solid orange";
+        if (t.pipeline === "answer_pipeline") div.style.borderLeft = "4px solid blue";
+
+        const date = new Date(t.start_time * 1000).toLocaleString();
+
+        div.innerHTML = `
+          <b>${t.pipeline}</b><br>
+          ${t.query || ""}<br>
+          <small>${date}</small>
+        `;
+
+        div.onclick = () => loadTrace(t.trace_id);
+        container.appendChild(div);
+      });
+    }
+
+    async function loadTrace(trace_id) {
+      const res = await fetch(`/trace/${trace_id}`);
+      const trace = await res.json();
+
+      const container = document.getElementById('traceDetail');
+
+      let html = `
+        <h2>Trace ${trace_id}</h2>
+        <p><b>Start:</b> ${new Date(trace.start_time * 1000).toLocaleString()}</p>
+      `;
+
+      if (trace.end_time) {
+        const duration = (trace.end_time - trace.start_time).toFixed(2);
+        html += `<p><b>Total duration:</b> ${duration}s</p>`;
+      }
+
+      html += `<h3>Steps</h3>`;
+
+      trace.steps.forEach(step => {
+        html += `
+          <div class="step">
+            <div class="step-title">${step.step}</div>
+            <div class="step-meta">
+              ${step.duration ? `⏱ ${step.duration.toFixed(3)}s` : ''}
+            </div>
+            <div class="json">${JSON.stringify(step.data, null, 2)}</div>
+          </div>
+        `;
+      });
+
+      if (trace.response) {
+        html += `
+          <h3>Final Answer</h3>
+          <div class="json">${trace.response}</div>
+        `;
+      }
+
+      container.innerHTML = html;
+    }
+
+
+    // auto refresh traces
+    setInterval(loadTraces, 5000);
+    loadTraces();
+
+</script>
+
+</body>
+</html>

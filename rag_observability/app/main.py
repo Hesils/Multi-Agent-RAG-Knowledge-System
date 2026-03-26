@@ -1,8 +1,10 @@
+import uuid
 from typing import Dict, List, Any
 
 from fastapi import FastAPI
 from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 from fastapi.responses import Response
+from fastapi.staticfiles import StaticFiles
 import time
 
 from app.observability import (
@@ -29,6 +31,7 @@ from pydantic import BaseModel
 
 
 app = FastAPI()
+app.mount("/ui", StaticFiles(directory="app/static", html=True), name="static")
 
 @app.get("/")
 def root():
@@ -162,30 +165,59 @@ def metrics_batch(payload: BatchPayload):
 
     return {"status": "ok", "events_processed": len(payload.events)}
 
+
+# ------------ Trace Viewer ------------
 traces: Dict[str, Dict] = {}
 
-# modèle pour un chunk trace
-class ChunkTrace(BaseModel):
-    content: str
-    score: float
-    source_file: str
+class StartTracePayload(BaseModel):
+    pipeline: str
+    query: str | None = None
 
-# modèle pour une requête trace
-class QueryTrace(BaseModel):
-    query: str
-    chunks: List[ChunkTrace]
-    agents_used: List[str]
-    retrieval_time: float
-    llm_time: float
-    response: str
-    timestamp: float = time.time()
+@app.post("/trace/start")
+def start_trace(payload: StartTracePayload):
+    trace_id = str(uuid.uuid4())
 
-# endpoint pour enregistrer une trace
-@app.post("/trace")
-def add_trace(trace: QueryTrace):
-    trace_id = str(len(traces) + 1)
-    traces[trace_id] = trace.model_dump()
+    traces[trace_id] = {
+        "pipeline": payload.pipeline,
+        "query": payload.query,
+        "steps": [],
+        "start_time": time.time()
+    }
+
     return {"trace_id": trace_id}
+
+class StepPayload(BaseModel):
+    trace_id: str
+    step: str
+    data: dict
+    duration: float | None = None
+
+
+@app.post("/trace/step")
+def add_step(payload: StepPayload):
+    trace = traces.get(payload.trace_id)
+
+    if not trace:
+        return {"error": "trace not found"}
+
+    trace["steps"].append({
+        "step": payload.step,
+        "data": payload.data,
+        "duration": payload.duration,
+        "timestamp": time.time()
+    })
+
+    return {"status": "ok"}
+
+@app.post("/trace/end")
+def end_trace(trace_id: str, response: str):
+    trace = traces.get(trace_id)
+
+    trace["response"] = response
+    trace["end_time"] = time.time()
+
+    return {"status": "ok"}
+
 
 # endpoint pour récupérer une trace
 @app.get("/trace/{trace_id}")
@@ -194,5 +226,16 @@ def get_trace(trace_id: str):
 
 # endpoint pour lister toutes les traces
 @app.get("/traces")
-def list_traces():
-    return [{"trace_id": k, "query": v["query"], "timestamp": v["timestamp"]} for k,v in traces.items()]
+def list_traces(pipeline: str | None = None):
+    results = []
+    for k, v in traces.items():
+        if pipeline and v.get("pipeline") != pipeline:
+            continue
+
+        results.append({
+            "trace_id": k,
+            "pipeline": v.get("pipeline"),
+            "query": v.get("query"),
+            "start_time": v.get("start_time")
+        })
+    return results

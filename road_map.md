@@ -23,7 +23,6 @@ Rag Pipeline
   - Code → par fonction
   - Markdown → par section
 - Observabilité
-  - logs d’ingestion
-  - nombre de chunks
-  - erreurs
-  - fichiers ignorés
+  - filtres (query, latence, agent)
+  - recherche texte
+  - comparaison de traces

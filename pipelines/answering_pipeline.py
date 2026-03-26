@@ -9,6 +9,9 @@ from agents.answer_critic_agent import AnswerCriticAgent
 from utils.chromadb_client import chromadb_client
 from utils.types.agent_types import AnswerSource
 from utils.metrics import metrics
+from utils.trace_client import TraceClient
+
+BASE_URL = "http://localhost:8000"
 
 class AnsweringPipeline:
     def __init__(self):
@@ -20,29 +23,56 @@ class AnsweringPipeline:
 
 
     def answer(self, user_input: str) -> str:
+        trace_client = TraceClient()
+        trace_id = trace_client.start(pipeline="answer_pipeline", query=user_input)
         metrics.add("request", {})
         req_start_time = time()
-        formated_data = self.retrieve_data(user_input)
+        trace_client.step("start", {"query": user_input})
+        # --------- Retrieve
+        formated_data = self.retrieve_data(user_input, trace_client)
+
         answer_try = 0
-        answer_agent_output = self.answer_agent.execute(user_input, "user", formated_data)
+        # --------- Answer
+        answer_agent_output = self.answer_agent.execute(user_input, "user", formated_data, trace_client)
+        # ---------- Critic loop
         while answer_try < 5:
             answer_critic = self.answer_critic_agent.execute(json.dumps({
                 "user_query": user_input,
                 "answer": answer_agent_output.answer,
                 "chunks": formated_data,
                 "answer_sources": [source.model_dump_json() for source in answer_agent_output.sources]
-            }), role="user")
+            }), role="user", trace_client=trace_client)
             if answer_critic.is_valid:
                 break
             else:
                 answer_try += 1
-                answer_agent_output = self.answer_agent.execute(answer_critic.model_dump_json(), "system")
-        metrics.add("request", {"duration": time() - req_start_time})
-        return "\n".join([answer_agent_output.answer, self.format_sources(answer_agent_output.sources)])
+                answer_agent_output = self.answer_agent.execute(
+                    answer_critic.model_dump_json(),
+                    "system",
+                    trace_client=trace_client
+                )
+        total_duration = time() - req_start_time
+        metrics.add("request", {"duration": total_duration})
 
-    def retrieve_data(self, user_input: str) -> str:
+        final_answer = "\n".join([answer_agent_output.answer, self.format_sources(answer_agent_output.sources)])
+        trace_client.step("final_answer", {
+            "length": len(final_answer),
+            "sources_count": len(answer_agent_output.sources)
+        }, duration=total_duration)
+
+        trace_client.end(final_answer)
+        return final_answer
+
+    def retrieve_data(self, user_input: str, trace_client: TraceClient) -> str:
         retrieval_start_time = time()
-        reworked_query = self.query_agent.execute(user_input, role="user")
+        # -------- QUERY REWRITE --------
+        reworked_query = self.query_agent.execute(user_input, role="user", trace_client=trace_client)
+
+        trace_client.step("query_rewrite", {
+            "optimized_query": reworked_query.optimized_query,
+            "sub_queries": reworked_query.sub_queries
+        })
+        # -------- VECTOR SEARCH --------
         sub_queries_chunks = chromadb_client.get_chunks_for_collection(self.collection, reworked_query.sub_queries)
         query_chunks = chromadb_client.get_chunks_for_collection(self.collection, reworked_query.optimized_query)
         ids_list, content_list, metadata_list = self.make_chunks_unique(
@@ -51,13 +81,18 @@ class AnsweringPipeline:
             query_chunks["metadatas"] + sub_queries_chunks["metadatas"]
         )
         metrics.add("documents", {"count": len(set(metadata["source"] for metadata in metadata_list))})
+        trace_client.step("retrieval", {
+            "nb_chunks": len(ids_list)
+        })
+
         formated_data = self.format_data(ids_list, content_list, metadata_list)
         metrics.add("retrieval_time", {"duration": time() - retrieval_start_time})
+        # -------- RERANK --------
         rerank_stime = time()
         ranker_output = self.chunk_ranker_agent.execute(json.dumps({
             "user_query": user_input,
             "chunks": formated_data
-        }), role="user")
+        }), role="user", trace_client=trace_client)
         ids_list, content_list, metadata_list = self.make_chunks_unique(
             query_chunks["ids"] + sub_queries_chunks["ids"],
             query_chunks["documents"] + sub_queries_chunks["documents"],
@@ -65,7 +100,11 @@ class AnsweringPipeline:
             ids_to_exclude=[chunk.chunk_id for chunk in ranker_output.chunks_rank if not chunk.relevance > 0.7]
         )
         formated_data = self.format_data(ids_list, content_list, metadata_list)
-        metrics.add("rerank_time", {"duration": time() - rerank_stime})
+        rerank_time = time() - rerank_stime
+        metrics.add("rerank_time", {"duration": rerank_time})
+        trace_client.step("rerank", {
+            "kept_chunks": len(ids_list)
+        }, duration=rerank_time)
         return formated_data
 
     @staticmethod

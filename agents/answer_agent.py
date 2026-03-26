@@ -3,6 +3,7 @@ from typing import Union, Optional
 from langchain_openai import ChatOpenAI
 
 from agents.base_agent import BaseAgent
+from utils.trace_client import TraceClient
 from utils.types.agent_types import AnswerOutput
 
 
@@ -24,10 +25,10 @@ class AnswerAgent(BaseAgent):
             output_type=AnswerOutput
         )
 
-    def execute(self, request: str, role: str, data: str = ""):
+    def execute(self, request: str, role: str, data: str = "", trace_client: Optional[TraceClient] = None):
         if data:
             self.agent_input.messages.append({
                 "role": "system",
                 "content": f"There is the provided reference data: {data}"
             })
-        return super().execute(request, role)
+        return super().execute(request, role, trace_client)
