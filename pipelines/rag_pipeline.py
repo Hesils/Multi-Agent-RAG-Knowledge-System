@@ -5,6 +5,7 @@ from typing import Union
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import chromadb
+import openai
 from langchain_core.documents import Document
 
 from agents.ChunkContextualizerAgent import ChunkContextualizerAgent
@@ -271,15 +272,24 @@ class RagPipeline:
             chunk.metadata["page"],
             chunks
         )
-
-        content = chunk_manager.contextualize_chunk(
-            chunk,
-            context_pages,
-            self.chunk_contextualizer_agent,
-            trace_client
-        )
+        try:
+            content = chunk_manager.contextualize_chunk(
+                chunk,
+                context_pages,
+                self.chunk_contextualizer_agent,
+                trace_client
+            )
+        except openai.RateLimitError as e:
+            metrics.add("error", {"type": "rate_limit"})
+            time.sleep(120)
+            content = chunk_manager.contextualize_chunk(
+                chunk,
+                context_pages,
+                self.chunk_contextualizer_agent,
+                trace_client
+            )
         # To avoid rate limit reach
-        time.sleep(30)
+        time.sleep(60)
         return {
             "content": content,
             "metadata": chunk.metadata,

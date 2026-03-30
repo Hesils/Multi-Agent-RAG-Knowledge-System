@@ -10,6 +10,7 @@ from utils.chromadb_client import chromadb_client
 from utils.types.agent_types import AnswerSource
 from utils.metrics import metrics
 from utils.trace_client import TraceClient
+from utils.bm25_utils import compute_bm25_scores
 
 BASE_URL = "http://localhost:8000"
 
@@ -75,11 +76,32 @@ class AnsweringPipeline:
         # -------- VECTOR SEARCH --------
         sub_queries_chunks = chromadb_client.get_chunks_for_collection(self.collection, reworked_query.sub_queries)
         query_chunks = chromadb_client.get_chunks_for_collection(self.collection, reworked_query.optimized_query)
-        ids_list, content_list, metadata_list = self.make_chunks_unique(
+        ids_list, content_list, metadata_list, distance_list = self.make_chunks_unique(
             query_chunks["ids"] + sub_queries_chunks["ids"],
             query_chunks["documents"] + sub_queries_chunks["documents"],
-            query_chunks["metadatas"] + sub_queries_chunks["metadatas"]
+            query_chunks["metadatas"] + sub_queries_chunks["metadatas"],
+            query_chunks["distances"] + sub_queries_chunks["distances"]
         )
+        # -------- VECTOR SCORES --------
+        vector_scores = self.normalize_vector_scores(distance_list)
+        # --------- BM25 ---------
+        bm25_scores = compute_bm25_scores(
+            reworked_query.optimized_query,
+            list(content_list)
+        )
+        # -------- HYBRID SCORING --------
+        hybrid_scores = [
+            0.7 * v + 0.3 * b
+            for v, b in zip(vector_scores, bm25_scores)
+        ]
+
+        # Sort
+        ranked = sorted(
+            zip(ids_list, content_list, metadata_list, hybrid_scores),
+            key=lambda x: x[3],
+            reverse=True
+        )
+        ids_list, content_list, metadata_list, _ = zip(*ranked)
         metrics.add("documents", {"count": len(set(metadata["source"] for metadata in metadata_list))})
         trace_client.step("retrieval", {
             "nb_chunks": len(ids_list)
@@ -93,10 +115,11 @@ class AnsweringPipeline:
             "user_query": user_input,
             "chunks": formated_data
         }), role="user", trace_client=trace_client)
-        ids_list, content_list, metadata_list = self.make_chunks_unique(
+        ids_list, content_list, metadata_list, distance_list = self.make_chunks_unique(
             query_chunks["ids"] + sub_queries_chunks["ids"],
             query_chunks["documents"] + sub_queries_chunks["documents"],
             query_chunks["metadatas"] + sub_queries_chunks["metadatas"],
+            query_chunks["distances"] + sub_queries_chunks["distances"],
             ids_to_exclude=[chunk.chunk_id for chunk in ranker_output.chunks_rank if not chunk.relevance > 0.7]
         )
         formated_data = self.format_data(ids_list, content_list, metadata_list)
@@ -109,24 +132,26 @@ class AnsweringPipeline:
 
     @staticmethod
     def make_chunks_unique(
-            ids: list[str],
-            contents: list[str],
-            metadatas: list[dict],
+            ids: list[list[str]],
+            contents: list[list[str]],
+            metadatas: list[list[dict]],
+            distances: list[list[float]],
             ids_to_exclude=None
-    ) -> tuple[list[str], list[str], list[dict]]:
+    ) -> tuple[list[str], list[str], list[dict], list[float]]:
 
-        ids_list, content_list, metadata_list = list(), list(), list()
+        ids_list, content_list, metadata_list, distance_list = list(), list(), list(), list()
         if ids_to_exclude is None:
             ids_to_exclude = []
-        for batch in zip(ids, contents, metadatas):
-            records = zip(batch[0], batch[1], batch[2])
-            for rec_id, content, metadata in records:
+        for batch in zip(ids, contents, metadatas, distances):
+            records = zip(batch[0], batch[1], batch[2], batch[3])
+            for rec_id, content, metadata, distance in records:
                 if rec_id in ids_list or rec_id in ids_to_exclude:
                     continue
                 ids_list.append(rec_id)
                 content_list.append(content)
                 metadata_list.append(metadata)
-        return ids_list, content_list, metadata_list
+                distance_list.append(distance)
+        return ids_list, content_list, metadata_list, distance_list
 
     @staticmethod
     def format_sources(sources: list[AnswerSource]):
@@ -144,6 +169,13 @@ class AnsweringPipeline:
             clear_metadata = {"source": metadata["source"], "page": metadata["page"]}
             formated_data[rec_id] = {"content": content, "metadata": clear_metadata}
         return json.dumps(formated_data)
+
+    @staticmethod
+    def normalize_vector_scores(distances: list[float]) -> list[float]:
+        sims = [1 / (1 + d) for d in distances]  # why: invert distance
+
+        max_sim = max(sims) if sims else 1.0
+        return [s / max_sim for s in sims]
 
     @staticmethod
     def init_query_agent():

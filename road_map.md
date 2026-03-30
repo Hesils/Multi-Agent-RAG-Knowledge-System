@@ -9,6 +9,7 @@ Rag Pipeline
 - Ingestion propre multi type
   - Implementer un CodeLoader
   - Implementer un GDocLoader
+  - Loader pdf -> Marker ou Docling
 - Une collection mais metadata enrichies
   - metadata = {
     "project": "projectA", ??
@@ -18,6 +19,7 @@ Rag Pipeline
     }
 - Préparation pour le fetch par AI Agents
   - chunk.metadata["keywords"] = extract_keywords(chunk) ???
+  - générer des "relation chunks" — un agent qui, pour chaque nouvelle paire d'articles thématiquement proches, génère un micro-résumé des convergences/divergences et l'indexe comme un chunk synthétique.
 - Smart chunking
   - PDF → par paragraphe
   - Code → par fonction

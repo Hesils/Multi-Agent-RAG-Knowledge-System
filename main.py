@@ -1,5 +1,5 @@
 import os
-
+os.environ["HF_HUB_DISABLE_SYMLINKS"] = "1"
 from cli.main_cli import app
 
 

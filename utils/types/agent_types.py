@@ -30,7 +30,13 @@ class AnswerOutput(BaseModel):
     answer: str
     sources: list[AnswerSource]
 
+class InvalidClaim(BaseModel):
+    claim: str
+    reason: str
+    chunk_ids_checked: list[str]
+
 class AnswerCriticAgentOutput(BaseModel):
     is_valid: bool
     confidence_score: float
-    issues: Optional[list[str]]
+    invalid_claims: Optional[list[InvalidClaim]]
+    missing_aspects: Optional[list[str]]
