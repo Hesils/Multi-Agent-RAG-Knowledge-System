@@ -1,5 +1,3 @@
-# file: odt_loader.py
-
 from pathlib import Path
 from zipfile import ZipFile
 import xml.etree.ElementTree as ET

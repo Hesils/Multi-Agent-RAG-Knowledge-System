@@ -54,7 +54,7 @@ class BaseChunksManager(ABC):
             try:
                 contextualized_content = contextualizer.execute(json.dumps({
                     "chunk": chunk.page_content,
-                    "around_pages_content": "\n".join([page.page_content for page in context_pages_content])
+                    "surrounding_pages": "\n".join([page.page_content for page in context_pages_content])
                 }), role="user", trace_client=trace_client)
                 return contextualized_content.content
             except StructuredOutputValidationError as e:

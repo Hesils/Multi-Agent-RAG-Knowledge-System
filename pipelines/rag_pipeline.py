@@ -1,4 +1,3 @@
-import os
 import time
 from pathlib import Path
 from typing import Union
@@ -279,7 +278,7 @@ class RagPipeline:
                 self.chunk_contextualizer_agent,
                 trace_client
             )
-        except openai.RateLimitError as e:
+        except openai.RateLimitError:
             metrics.add("error", {"type": "rate_limit"})
             time.sleep(120)
             content = chunk_manager.contextualize_chunk(
@@ -289,9 +288,9 @@ class RagPipeline:
                 trace_client
             )
         # To avoid rate limit reach
-        time.sleep(60)
+        time.sleep(30)
         return {
-            "content": content,
+            "content": f"{content}\n\n{chunk.page_content}",
             "metadata": chunk.metadata,
             "id": chunk.metadata["uuid"]
         }

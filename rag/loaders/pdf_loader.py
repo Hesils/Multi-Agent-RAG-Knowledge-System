@@ -1,4 +1,3 @@
-# file: pdf_loader.py
 from collections import defaultdict
 from pathlib import Path
 
