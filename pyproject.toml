@@ -20,6 +20,7 @@ dependencies = [
     "pytest==9.0.2",
     "python-docx==1.2.0",
     "semver==3.0.4",
+    "streamlit==1.56.0",
     "unstructured==0.21.5",
     "watchdog==6.0.0",
 ]

@@ -10,7 +10,8 @@ def init():
         raise ValueError("CHROMADB_PATH must be valued in environment")
     if "DATA_PATH" not in os.environ:
         raise ValueError("DATA_PATH must be valued in environment")
-
+    # if "DB_PATH" not in os.environ:
+    #     raise ValueError("DB_PATH must be valued in environment")
 
 def main():
     init()

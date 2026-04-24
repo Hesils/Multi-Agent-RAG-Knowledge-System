@@ -56,13 +56,14 @@ class RagPipeline:
         tasks, new_hashes = self._collect_new_tasks(
             raw_doc, chunk_manager, existing_hashes
         )
+        print(f"Nb of new chunks: {len(new_hashes)}")
         trace_client.step(
             "loading_document",
             {"nb_pages": len(raw_doc), "updated_chunks": len(new_hashes), "not_updated_chunks": len(existing_hashes) - len(new_hashes)},
             time.time() - load_start_time
         )
         contextualisation_start_time = time.time()
-        documents, metadata, ids = self._execute_parallel(tasks, chunk_manager, trace_client)
+        documents, metadata, ids = self._execute_parallel(tasks, chunk_manager, trace_client, collection, chroma_client)
         trace_client.step(
             "contextualize_chunks",
             {},
@@ -75,10 +76,11 @@ class RagPipeline:
         ids_to_delete = self._compute_deletions(
             existing_hash_map, existing_hashes, new_hashes
         )
+        # Processing deletion part
         self._apply_changes(
             collection,
             chroma_client,
-            documents,
+            [],
             metadata,
             ids,
             ids_to_delete,
@@ -126,7 +128,7 @@ class RagPipeline:
             time.time() - load_start_time
         )
         contextualisation_start_time = time.time()
-        documents, metadata, ids = self._execute_parallel(tasks, chunk_manager, trace_client)
+        documents, metadata, ids = self._execute_parallel(tasks, chunk_manager, trace_client, collection, chroma_client)
         trace_client.step(
             "contextualize_chunks",
             {},
@@ -137,14 +139,14 @@ class RagPipeline:
             metrics.add("chunks_created", {"count" : len(documents)})
             metrics.add("file_processed", {"status" : "success", "file_type": chunk_manager.file_type})
 
-        self._apply_insert(
-            collection,
-            chroma_client,
-            documents,
-            metadata,
-            ids,
-            trace_client
-        )
+        # self._apply_insert(
+        #     collection,
+        #     chroma_client,
+        #     documents,
+        #     metadata,
+        #     ids,
+        #     trace_client
+        # )
         metrics.add("processing_time", {"duration" : time.time() - process_start_time})
         trace_client.end("File inserted")
 
@@ -265,7 +267,7 @@ class RagPipeline:
 
         return tasks, new_hashes
 
-    def _process_chunk(self, chunk, chunks, chunk_manager, trace_client: TraceClient):
+    def _process_chunk(self, chunk, chunks, chunk_manager, trace_client: TraceClient, collection: chromadb.Collection, chroma_client: ChromadbClient):
         context_pages = chunk_manager.get_chunk_around_pages(
             chunk.metadata["source"],
             chunk.metadata["page"],
@@ -280,32 +282,40 @@ class RagPipeline:
             )
         except openai.RateLimitError:
             metrics.add("error", {"type": "rate_limit"})
-            time.sleep(120)
+            time.sleep(300)
             content = chunk_manager.contextualize_chunk(
                 chunk,
                 context_pages,
                 self.chunk_contextualizer_agent,
                 trace_client
             )
+        self._apply_insert(
+            collection,
+            chroma_client,
+            [f"{content}\n\n{chunk.page_content}"],
+            [chunk.metadata],
+            [chunk.metadata["uuid"]],
+            trace_client
+        )
         # To avoid rate limit reach
-        time.sleep(30)
+        time.sleep(60)
         return {
             "content": f"{content}\n\n{chunk.page_content}",
             "metadata": chunk.metadata,
             "id": chunk.metadata["uuid"]
         }
 
-    def _execute_parallel(self, tasks, chunk_manager: BaseChunksManager, trace_client: TraceClient):
+    def _execute_parallel(self, tasks, chunk_manager: BaseChunksManager, trace_client: TraceClient, collection: chromadb.Collection, chroma_client: ChromadbClient):
         documents, metadata, ids = [], [], []
 
         if not tasks:
             return documents, metadata, ids
 
-        max_workers = min(8, len(tasks))
+        max_workers = min(2, len(tasks))
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = [
-                executor.submit(self._process_chunk, chunk, chunks, chunk_manager, trace_client)
+                executor.submit(self._process_chunk, chunk, chunks, chunk_manager, trace_client, collection, chroma_client)
                 for chunk, chunks in tasks
             ]
 

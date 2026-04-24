@@ -25,7 +25,7 @@ def rag_update_all():
 def rag_update():
     rag_pipeline = RagPipeline()
     collection = chromadb_client.chroma_client.get_or_create_collection(name="chunks")
-    rag_pipeline.update_doc(r"G:\Mon Drive\test.gdoc", collection, chromadb_client)
+    rag_pipeline.update_doc(r"C:\Users\Desvignes\IdeaProjects\multi-agent-rag-knowledge-system\tests\features\LECT 8 20260209-Rapport-au-Ministre_MLR.pdf", collection, chromadb_client)
 
 @app.command()
 def rag_get():
