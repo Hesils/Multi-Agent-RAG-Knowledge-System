@@ -1,0 +1,11 @@
+# graphify / codegraph knowledge graph (regenerable via graphify update .)
+graphify-out/
+
+# junk / editor / caches
+__pycache__/
+*.pyc
+.idea/
+# regenerable test artifacts / large fixtures
+tests/chromadb/
+*.sqlite3
+tests/features/*.pdf

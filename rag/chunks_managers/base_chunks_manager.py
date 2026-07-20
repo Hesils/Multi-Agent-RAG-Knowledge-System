@@ -8,7 +8,7 @@ from langchain.agents.structured_output import StructuredOutputValidationError
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from agents.base_agent import BaseAgent
-from utils.trace_client import TraceClient
+# from utils.trace_client import TraceClient
 
 
 class BaseChunksManager(ABC):
@@ -48,14 +48,22 @@ class BaseChunksManager(ABC):
         return chunks
 
     @staticmethod
-    def contextualize_chunk(chunk: Document, context_pages_content: list[Document], contextualizer: BaseAgent, trace_client: TraceClient) -> str:
+    def contextualize_chunk(
+            chunk: Document,
+            context_pages_content: list[Document],
+            contextualizer: BaseAgent,
+            # trace_client: TraceClient
+    ) -> str:
         call_try = 0
         while call_try < 5:
             try:
                 contextualized_content = contextualizer.execute(json.dumps({
                     "chunk": chunk.page_content,
                     "surrounding_pages": "\n".join([page.page_content for page in context_pages_content])
-                }), role="user", trace_client=trace_client)
+                }),
+                    role="user",
+                    # trace_client=trace_client
+                )
                 return contextualized_content.content
             except StructuredOutputValidationError as e:
                 print(f"Structured Agent Output error : {e}")
